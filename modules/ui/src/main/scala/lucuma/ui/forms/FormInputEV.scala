@@ -21,6 +21,7 @@ import react.semanticui.collections.form.FormInput
 import react.semanticui.elements.icon.Icon
 import react.semanticui.elements.input._
 import react.semanticui.elements.label._
+import cats.data.NonEmptyList
 
 /**
  * FormInput component that uses an ExternalValue to share the content of the field
@@ -53,20 +54,24 @@ final case class FormInputEV[EV[_], A](
   transparent:     js.UndefOr[Boolean] = js.undefined,
   width:           js.UndefOr[SemanticWidth] = js.undefined,
   value:           EV[A],
-  format:          InputFormat[A] = InputFormat.id,
+  validate:        InputValidate[A] = InputValidate.id,
   modifiers:       Seq[TagMod] = Seq.empty,
   onChange:        FormInputEV.ChangeCallback[A] =
     (_: A) => Callback.empty, // callback for parents of this component
   onBlur:          FormInputEV.ChangeCallback[A] = (_: A) => Callback.empty
 )(implicit val ev: ExternalValue[EV])
     extends ReactProps[FormInputEV[Any, Any]](FormInputEV.component) {
-  def valGet: String = ev.get(value).foldMap(format.reverseGet)
+
+  def valGet: String = ev.get(value).foldMap(validate.reverseGet)
+
   def valSet(s: String): Callback =
-    format.getOption(s).map(ev.set(value)).getOrEmpty
+    validate.getOption(s).map(ev.set(value)).getOrEmpty
+
   val onBlurC: InputEV.ChangeCallback[String]   =
-    (s: String) => format.getOption(s).map(onBlur).getOrEmpty
+    (s: String) => validate.getOption(s).map(onBlur).getOrEmpty
+
   val onChangeC: InputEV.ChangeCallback[String] =
-    (s: String) => format.getOption(s).map(onChange).getOrEmpty
+    (s: String) => validate.getOption(s).map(onChange).getOrEmpty
 
   def withMods(mods: TagMod*): FormInputEV[EV, A] = copy(modifiers = modifiers ++ mods)
 }
@@ -77,7 +82,7 @@ object FormInputEV {
   type Scope[EV[_], A]   = RenderScope[Props[EV, A], State, Unit]
 
   @Lenses
-  final case class State(curValue: String, prevValue: String)
+  final case class State(curValue: String, prevValue: String, errors: Option[NonEmptyList[String]])
 
   def onTextChange[EV[_], A]($ : Scope[EV, A]): ReactEventFromInput => Callback =
     (e: ReactEventFromInput) => {
